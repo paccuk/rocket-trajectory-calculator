@@ -1,80 +1,127 @@
-import numpy as np
-import matplotlib.pyplot as plt
+from PyQt5.QtWidgets import QSizePolicy, QVBoxLayout, QWidget
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib import animation
+import matplotlib.pyplot as plt
+import numpy as np
 
 
 class Animation:
-    def __init__(self, missile) -> None:
-        self.missile = missile
+    def __init__(self) -> None:
+        self.is_active = False
 
-    def animate_trajectory(self):
+    def animate_trajectory(self, ax, fig, missiles, show_legend=False):
         "Animate the trajectory of a missile instance."
 
-        color = "#636EFA"
-        indices_for_every_second = np.arange(
-            0, self.missile.pos_array.shape[0], int(1 / self.missile.dt)
-        )
-        timestamps_array = self.missile.pos_array[indices_for_every_second, :]
-        boost_end_index = int(self.missile.thrust_duration / self.missile.dt)
+        self.missiles = missiles
+        self.colors = [f"C{i}" for i in range(len(self.missiles))]
+        self.names = [missile.name for missile in self.missiles]
 
-        fig, ax = plt.subplots()
+        ballistic_phase = [
+            ax.plot(
+                [],
+                [],
+                lw=1,
+                alpha=0.6,
+                ls="--",
+                label=f"Ballistic phase: {name}",
+                color=color,
+            )[0]
+            for name, color in zip(self.names, self.colors)
+        ]
 
-        (ballistic_phase,) = ax.plot(
-            [], [], c=color, lw=2, alpha=0.6, ls="--", label="Ballistic phase"
-        )
+        boost_phase = [
+            ax.plot([], [], lw=1, label=f"Boost phase: {name}", color=color)[0]
+            for name, color in zip(self.names, self.colors)
+        ]
 
-        (boost_phase,) = ax.plot([], [], c=color, lw=2, label="Boost phase")
+        timestamps = [
+            ax.scatter(
+                [],
+                [],
+                alpha=0.9,
+                marker=".",
+                label=f"Seconds passed: {name}",
+                color=color,
+            )
+            for name, color in zip(self.names, self.colors)
+        ]
 
-        timestamps = ax.scatter(
-            [], [], c=color, alpha=0.9, marker="o", label="Seccond passed"
-        )
+        max_X = max(m.pos_array[:, 0].max() for m in self.missiles)
+        max_Y = max(m.pos_array[:, 1].max() for m in self.missiles)
 
         ax.set(
-            xlim=[-25, 500],
-            ylim=[-25, 400],
+            xlim=[-25, max_X + 250],
+            ylim=[-25, max_Y + 250],
             xlabel="X (m)",
             ylabel="Y (m)",
-            title="Missile Trajectory",
+            title="Missile Trajectories",
         )
-        ax.legend(fontsize="small")
+        if show_legend:
+            ax.legend(loc="upper right", fontsize="small")
         ax.grid(True)
 
         def init():
-            ballistic_phase.set_data([], [])
-            boost_phase.set_data([], [])
-            timestamps.set_offsets(np.array([]).reshape(0, 2))
+            for trajectory, boost, timestamp in zip(
+                ballistic_phase, boost_phase, timestamps
+            ):
+                trajectory.set_data([], [])
+                boost.set_data([], [])
+                timestamp.set_offsets(np.array([]).reshape(0, 2))
 
-            return ballistic_phase, boost_phase, timestamps
+            return ballistic_phase + boost_phase + timestamps
 
         def update(frame):
-            ballistic_phase.set_data(
-                self.missile.pos_array[:frame, 0], self.missile.pos_array[:frame, 1]
-            )
-
-            if frame < boost_end_index:
-                boost_phase.set_data(
-                    self.missile.pos_array[:frame, 0], self.missile.pos_array[:frame, 1]
+            for _, (missile, trajectory, boost, timestamp) in enumerate(
+                zip(self.missiles, ballistic_phase, boost_phase, timestamps)
+            ):
+                trajectory.set_data(
+                    missile.pos_array[:frame, 0], missile.pos_array[:frame, 1]
                 )
 
-            if frame in indices_for_every_second:
-                timestamps.set_offsets(
-                    timestamps_array[
-                        : np.where(indices_for_every_second == frame)[0][0] + 1, :
-                    ]
-                )
+                if frame < missile.boost_end_index:
+                    boost.set_data(
+                        missile.pos_array[:frame, 0], missile.pos_array[:frame, 1]
+                    )
 
-            return (ballistic_phase, boost_phase, timestamps)
+                if frame in missile.indices_for_every_second:
+                    timestamp.set_offsets(
+                        missile.timestamps_array[
+                            : np.where(missile.indices_for_every_second == frame)[0][0]
+                            + 1,
+                            :,
+                        ]
+                    )
+
+            return ballistic_phase + boost_phase + timestamps
 
         self.ani = animation.FuncAnimation(
             fig=fig,
             func=update,
             init_func=init,
             blit=True,
-            frames=self.missile.pos_array.shape[0],
+            frames=max(m.pos_array.shape[0] for m in self.missiles),
             interval=20,
         )
 
-        plt.show()
-
     def save_animation(self):
-        self.ani.save(f"{self.missile.name}.mp4")
+        self.ani.save(filename="missiles_animation.gif", writer="pillow")
+
+
+class MissileAnimationWidget(QWidget):
+    def __init__(self, parent):
+        super(MissileAnimationWidget, self).__init__(parent)
+        self.animation = Animation()
+
+        self.figure, self.ax = plt.subplots()
+
+        self.canvas = FigureCanvas(self.figure)
+        self.canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
+        layout = QVBoxLayout()
+        layout.addWidget(self.canvas)
+        self.setLayout(layout)
+
+    def start_animation(self, missiles, show_legend):
+        self.animation.is_active = True
+        self.animation.animate_trajectory(self.ax, self.figure, missiles, show_legend)
+        self.canvas.draw()
