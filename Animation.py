@@ -1,4 +1,5 @@
 from PyQt5.QtWidgets import QSizePolicy, QVBoxLayout, QWidget
+from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib import animation
 import matplotlib.pyplot as plt
@@ -118,6 +119,7 @@ class MissileAnimationWidget(QWidget):
         self.canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         layout = QVBoxLayout()
+        layout.addWidget(NavigationToolbar2QT(self.canvas, self))
         layout.addWidget(self.canvas)
         self.setLayout(layout)
 

@@ -581,7 +581,7 @@ class MissileAnimationApp(QtWidgets.QMainWindow):
 
 
 class config_loader_widget(QtWidgets.QWidget):
-    def __init__(self, parent):
+    def __init__(self, parent=None):
         super(config_loader_widget, self).__init__(parent)
         self.setup_ui()
 
@@ -637,7 +637,6 @@ class config_loader_widget(QtWidgets.QWidget):
         if self.config_list_widget.currentRow() != -1:
             self.load_config()
         self.close_window()
-        
 
     def close_window(self):
         self.close()
